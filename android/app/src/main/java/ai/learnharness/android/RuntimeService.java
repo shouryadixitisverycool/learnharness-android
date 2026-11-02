@@ -3,21 +3,31 @@ package ai.learnharness.android;
 import android.app.*;
 import android.content.Intent;
 import android.os.IBinder;
+import android.os.Handler;
+import android.os.Looper;
 import java.io.*;
 import java.net.*;
 import java.security.SecureRandom;
 import java.util.Map;
 import java.util.zip.*;
+import org.json.*;
 
 public class RuntimeService extends Service {
     static volatile String origin, token, failure;
     static volatile boolean ready;
+    private static volatile boolean activityVisible;
+    private static volatile RuntimeService instance;
     private Process process;
     private AndroidDemoRunner demos;
     private volatile boolean stopping;
+    private final Handler idleHandler = new Handler(Looper.getMainLooper());
+    private final Runnable idleCheck = this::checkIdleAndStop;
+    private static final long IDLE_GRACE_MS = 10 * 60 * 1000L;
+    private static final long ACTIVE_RECHECK_MS = 60 * 1000L;
 
     @Override public void onCreate() {
         super.onCreate();
+        instance = this;
         failure = null;
         ready = false;
         NotificationManager manager = getSystemService(NotificationManager.class);
@@ -27,6 +37,52 @@ public class RuntimeService extends Service {
             .setContentTitle("LearnHarness").setContentText("Your learning server is running on this phone")
             .setContentIntent(open).setOngoing(true).build());
         new Thread(this::startRuntime, "learnharness-runtime").start();
+    }
+
+    static void requestIdleStop() {
+        activityVisible = false;
+        RuntimeService service = instance;
+        if (service != null) {
+            service.idleHandler.removeCallbacks(service.idleCheck);
+            service.idleHandler.postDelayed(service.idleCheck, IDLE_GRACE_MS);
+        }
+    }
+
+    static void cancelIdleStop() {
+        activityVisible = true;
+        RuntimeService service = instance;
+        if (service != null) service.idleHandler.removeCallbacks(service.idleCheck);
+    }
+
+    private void checkIdleAndStop() {
+        if (stopping || !ready) return;
+        new Thread(() -> {
+            boolean idle = false;
+            try {
+                JSONObject chats = getJson("/api/chats");
+                JSONArray rows = chats.optJSONArray("chats");
+                idle = rows != null;
+                for (int i = 0; idle && i < rows.length(); i++) idle = !rows.getJSONObject(i).optBoolean("busy");
+                JSONObject activity = getJson("/api/activity");
+                idle &= activity.optJSONArray("jobs") != null && activity.optJSONArray("jobs").length() == 0;
+                idle &= activity.optJSONArray("extractions") != null && activity.optJSONArray("extractions").length() == 0;
+            } catch (Exception ignored) { /* Stay alive if the status check is uncertain. */ }
+            if (idle && !activityVisible) stopSelf();
+            else idleHandler.postDelayed(idleCheck, ACTIVE_RECHECK_MS);
+        }, "learnharness-idle-check").start();
+    }
+
+    private JSONObject getJson(String path) throws IOException, org.json.JSONException {
+        HttpURLConnection connection = (HttpURLConnection) new URL(origin + path).openConnection();
+        try {
+            connection.setRequestProperty("Cookie", "lh_android=" + token);
+            connection.setConnectTimeout(3000);
+            connection.setReadTimeout(5000);
+            if (connection.getResponseCode() != 200) throw new IOException("status unavailable");
+            try (InputStream input = connection.getInputStream()) {
+                return new JSONObject(new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+            }
+        } finally { connection.disconnect(); }
     }
 
     private void startRuntime() {
@@ -129,6 +185,8 @@ public class RuntimeService extends Service {
     @Override public void onTimeout(int startId, int type) { failure = "Android paused the background server. Reopen LearnHarness to continue."; stopSelf(); }
     @Override public void onDestroy() {
         stopping = true;
+        idleHandler.removeCallbacksAndMessages(null);
+        if (instance == this) instance = null;
         ready = false;
         synchronized (this) { if (process != null) process.destroy(); }
         try { if (demos != null) demos.close(); } catch (IOException ignored) { }

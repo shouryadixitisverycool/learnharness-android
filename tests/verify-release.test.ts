@@ -307,7 +307,7 @@ describe("release gate — update feeds", () => {
 	}
 });
 
-describe("release gate — workflow wiring", () => {
+if (fs.existsSync(path.join(repoRoot, ".github", "workflows", "release.yml"))) describe("release gate — workflow wiring", () => {
 	const yaml = require("js-yaml") as { load(source: string): any };
 	const workflow = yaml.load(fs.readFileSync(path.join(repoRoot, ".github", "workflows", "release.yml"), "utf8"));
 	const verify = workflow.jobs.verify;

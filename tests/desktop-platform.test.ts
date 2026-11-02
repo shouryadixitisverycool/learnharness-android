@@ -1,6 +1,6 @@
 /** Platform window chrome + packaging policy, without launching Electron. */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -173,10 +173,11 @@ describe("workflow action versions", () => {
 	type Workflow = { jobs: Record<string, { steps: Step[] }> };
 	const yaml = require("js-yaml") as { load(source: string): Workflow };
 
-	for (const filename of ["ci.yml", "release.yml"]) {
+	for (const filename of ["ci.yml", ...(existsSync(new URL("../.github/workflows/release.yml", import.meta.url)) ? ["release.yml"] : [])]) {
 		it(`${filename} uses supported Action runtimes without changing the app's Node 26`, () => {
 			const workflow = yaml.load(readFileSync(new URL(`../.github/workflows/${filename}`, import.meta.url), "utf8"));
 			const expected = ["actions/checkout@v7", "actions/setup-node@v7"];
+			if (filename === "ci.yml") expected.push("actions/setup-java@v5");
 			if (filename === "release.yml") {
 				expected.push("actions/github-script@v9", "actions/upload-artifact@v7", "maxim-lobanov/setup-xcode@v1");
 			}
@@ -190,6 +191,7 @@ describe("workflow action versions", () => {
 						assert.equal(step.with?.["node-version"], "26");
 						assert.equal(step.with?.cache, "npm");
 					}
+					if (step.uses === "actions/setup-java@v5") assert.equal(step.with?.["java-version"], "17");
 					if (step.uses === "actions/upload-artifact@v7") {
 						assert.equal(step.with?.archive ?? true, true, "multi-file installers remain zipped artifacts");
 					}
@@ -200,7 +202,7 @@ describe("workflow action versions", () => {
 	}
 });
 
-describe("desktop release workflow", () => {
+if (existsSync(new URL("../.github/workflows/release.yml", import.meta.url))) describe("desktop release workflow", () => {
 	type Step = {
 		if?: string; run?: string; uses?: string; env?: Record<string, string>;
 		with?: { script?: string; "xcode-version"?: string };

@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -16,6 +17,8 @@ CACHE = ROOT / "runtime/cache"
 NATIVE = ROOT / "app/src/main/jniLibs/arm64-v8a"
 ASSETS = ROOT / "app/src/main/assets"
 BASE = "https://packages.termux.dev/apt/termux-main/"
+RESVG_REV = "9ca058462ac529120c8cc84ddcd6fef644cc5406"
+RESVG_SHA256 = "7ce8697451237577d473361aa688917a48cba00c4a8f3302a833455c9c2013fa"
 
 
 def run(*args, **kwargs):
@@ -33,6 +36,49 @@ def download(url, file, algorithm, expected):
 
 def needed(file):
     return re.findall(r"\(NEEDED\).*\[(.*?)\]", run("readelf", "-d", str(file)))
+
+
+def build_resvg():
+    archive = CACHE / "resvg-js.tar.gz"
+    download(
+        f"https://codeload.github.com/yisibl/resvg-js/tar.gz/{RESVG_REV}",
+        archive,
+        "sha256",
+        bytes.fromhex(RESVG_SHA256),
+    )
+    source = CACHE / f"resvg-js-source-{RESVG_REV[:12]}"
+    if not (source / "Cargo.toml").is_file():
+        source.mkdir(exist_ok=True)
+        subprocess.run(["bsdtar", "-xf", str(archive), "-C", str(source), "--strip-components", "1"], check=True)
+    shutil.copyfile(ROOT / "runtime/resvg-Cargo.lock", source / "Cargo.lock")
+
+    if not os.environ.get("ANDROID_HOME"):
+        raise RuntimeError("Set ANDROID_HOME to the Android SDK directory")
+    sdk = Path(os.environ["ANDROID_HOME"])
+    ndk = next((Path(value) for key in ("ANDROID_NDK_HOME", "ANDROID_NDK_ROOT") if (value := os.environ.get(key))), None)
+    if ndk is None:
+        installed = sorted((sdk / "ndk").glob("*"), reverse=True)
+        if not installed:
+            raise RuntimeError("Install Android NDK 27 or newer to build the 16 KB aligned resvg library")
+        ndk = installed[0]
+    linker = ndk / "toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+    if not linker.is_file():
+        raise RuntimeError(f"Android NDK linker is missing: {linker}")
+    if not shutil.which("rustup") or not shutil.which("cargo"):
+        raise RuntimeError("Install Rust with rustup and cargo to build the 16 KB aligned resvg library")
+    subprocess.run(["rustup", "toolchain", "install", "1.99.1", "--profile", "minimal", "--target", "aarch64-linux-android"], check=True)
+    env = os.environ.copy()
+    env.update({
+        "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER": str(linker),
+        "CC_aarch64_linux_android": str(linker),
+        "CXX_aarch64_linux_android": str(linker.parent / "aarch64-linux-android24-clang++"),
+        "RUSTFLAGS": (env.get("RUSTFLAGS", "") + " -C link-arg=-Wl,-z,max-page-size=16384").strip(),
+    })
+    subprocess.run(["cargo", "+1.99.1", "build", "--release", "--locked", "--target", "aarch64-linux-android"], cwd=source, env=env, check=True)
+    binary = source / "target/aarch64-linux-android/release/libresvg_js.so"
+    if not binary.is_file():
+        raise RuntimeError("resvg Android build did not produce libresvg_js.so")
+    return binary
 
 
 def main():
@@ -77,6 +123,7 @@ def main():
         ("@napi-rs/canvas-android-arm64", "skia.android-arm64.node", "liblh_canvas.so"),
         ("@resvg/resvg-js-android-arm64", "resvgjs.android-arm64.node", "liblh_resvg.so"),
     ]
+    resvg_binary = build_resvg()
     standalone = REPO / ".next/standalone"
     if not (standalone / "server.js").is_file():
         raise RuntimeError("Run npm run build and node scripts/build-server.mjs first")
@@ -88,7 +135,8 @@ def main():
         folder = CACHE / name.split("/")[-1]
         folder.mkdir(exist_ok=True)
         subprocess.run(["bsdtar", "-xf", str(file), "-C", str(folder)], check=True)
-        copy_library(name, folder / "package" / binary, destination)
+        native = resvg_binary if name == "@resvg/resvg-js-android-arm64" else folder / "package" / binary
+        copy_library(name, native, destination)
         target = standalone / "node_modules" / name
         target.mkdir(parents=True, exist_ok=True)
         metadata = json.loads((folder / "package/package.json").read_text())
@@ -128,7 +176,8 @@ def main():
         "Termux build recipes and patches: https://github.com/termux/termux-packages\n"
         "Exact binaries and SHA-256 checksums: termux-lock.json\n"
         "Node.js: https://nodejs.org/dist/v26.13.0/\n"
-        "JS/native package versions and sources: package-lock.json in the source archive.\n"
+        f"resvg source: https://github.com/yisibl/resvg-js/tree/{RESVG_REV} (MPL-2.0); Cargo.lock accompanies the source.\n"
+        "Canvas source/version: package-lock.json in the source archive.\n"
     )
     # Restore license notices the Next file tracer may omit.
     for package_json in standalone.glob("node_modules/**/package.json"):

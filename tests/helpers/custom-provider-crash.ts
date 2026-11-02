@@ -1,5 +1,6 @@
 /** Child-process fixture: owned profile only; every upstream fetch is synthetic. */
 import fs from "node:fs";
+import path from "node:path";
 import { AUTH_FILE, SETTINGS_FILE } from "../../config.ts";
 const [mode, action = "key", fault = "none"] = process.argv.slice(2);
 const requests: { url: string; authorization: string | null }[] = [];
@@ -20,11 +21,14 @@ fs.renameSync = (...args: Parameters<typeof rename>) => {
 		if (fault === "after-auth") process.exit(77);
 		return;
 	}
+	if (args[1] === SETTINGS_FILE && fault === "settings-landed") {
+		rename(...args);
+		throw new Error("fixture ambiguous settings completion");
+	}
 	return rename(...args);
 };
 fs.writeFileSync = (...args: Parameters<typeof write>) => {
-	if (args[0] === SETTINGS_FILE && fault === "double-io") throw new Error("fixture settings I/O failure");
-	if (args[0] === SETTINGS_FILE && fault === "settings-landed") { write(...args); throw new Error("fixture ambiguous settings completion"); }
+	if (String(args[0]).startsWith(`${path.dirname(SETTINGS_FILE)}/.settings.json.`) && fault === "double-io") throw new Error("fixture settings I/O failure");
 	return write(...args);
 };
 fs.readFileSync = ((...args: Parameters<typeof read>) => {

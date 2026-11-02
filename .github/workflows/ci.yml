@@ -51,8 +51,21 @@ jobs:
       - run: node scripts/build-server.mjs
       - name: Install Android native packaging tools
         run: sudo apt-get update && sudo apt-get install -y binutils libarchive-tools patchelf
+      - name: Install pinned Android NDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865"
+      - name: Install pinned Rust toolchain
+        run: |
+          if ! command -v rustup >/dev/null; then curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.99.1; fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          "$HOME/.cargo/bin/rustup" toolchain install 1.99.1 --profile minimal --target aarch64-linux-android
       - run: python3 android/prepare.py
-      - run: android/gradlew -p android assembleDebug
+      - run: android/gradlew -p android assembleDebug lintDebug
+      - name: Verify package identity and native payload
+        run: |
+          apk=android/app/build/outputs/apk/debug/app-debug.apk
+          test "$("$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest application-id "$apk")" = "ai.learnharness.android"
+          python3 android/verify_apk.py --application-id ai.learnharness.android "$apk"
+          python3 -m unittest android.tests.test_verify_apk
 
   standalone:
     name: Standalone (${{ matrix.platform }})

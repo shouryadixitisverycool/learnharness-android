@@ -21,13 +21,20 @@ public class MainActivity extends Activity {
     private FrameLayout root;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private ValueCallback<Uri[]> fileCallback;
+    private WebMessagePort exportPort;
     private PermissionRequest audioRequest;
-    private byte[] export;
+    private String exportPath;
+    private int exportPickerRequest;
     private boolean loaded;
     private static final int MAX_EXPORT = 25 * 1024 * 1024;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        if (state != null) {
+            exportPath = state.getString("exportPath");
+            exportPickerRequest = state.getInt("exportPickerRequest");
+        }
+        pruneStagedExports();
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(20, 20, 20));
         root.setOnApplyWindowInsetsListener((view, insets) -> {
@@ -54,6 +61,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        RuntimeService.cancelIdleStop();
         if (web == null || RuntimeService.ready) return;
         loaded = false;
         root.removeView(web);
@@ -63,6 +71,11 @@ public class MainActivity extends Activity {
         status.setVisibility(View.VISIBLE);
         startForegroundService(new Intent(this, RuntimeService.class));
         handler.postDelayed(this::awaitRuntime, 250);
+    }
+
+    @Override protected void onStop() {
+        super.onStop();
+        RuntimeService.requestIdleStop();
     }
 
     private void awaitRuntime() {
@@ -113,7 +126,9 @@ public class MainActivity extends Activity {
                 if (!local(Uri.parse(url))) return;
                 status.setVisibility(View.GONE);
                 // The message port is delivered only to the app's main frame, never demo iframes.
-                WebMessagePort[] ports = web.createWebMessageChannel();
+                if (exportPort != null) exportPort.close();
+                WebMessagePort[] ports = view.createWebMessageChannel();
+                exportPort = ports[0];
                 ports[0].setWebMessageCallback(new WebMessagePort.WebMessageCallback() {
                     @Override public void onMessage(WebMessagePort port, WebMessage message) {
                         try {
@@ -124,8 +139,8 @@ public class MainActivity extends Activity {
                     }
                 });
                 String nonce = java.util.UUID.randomUUID().toString();
-                web.evaluateJavascript("window.addEventListener('message', function receive(e) { if(e.data !== " + JSONObject.quote(nonce) + " || !e.ports[0]) return; window.removeEventListener('message', receive); const port=e.ports[0]; window.lhAndroidSaveText=(name,text,mime)=>port.postMessage(JSON.stringify({name,text,mime})); });", ignored ->
-                    web.postWebMessage(new WebMessage(nonce, new WebMessagePort[]{ports[1]}), Uri.parse(RuntimeService.origin)));
+                view.evaluateJavascript("window.addEventListener('message', function receive(e) { if(e.data !== " + JSONObject.quote(nonce) + " || !e.ports[0]) return; window.removeEventListener('message', receive); const port=e.ports[0]; window.lhAndroidSaveText=(name,text,mime)=>port.postMessage(JSON.stringify({name,text,mime})); });", ignored ->
+                    view.postWebMessage(new WebMessage(nonce, new WebMessagePort[]{ports[1]}), Uri.parse(RuntimeService.origin)));
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) {
@@ -136,6 +151,11 @@ public class MainActivity extends Activity {
                         else { loaded = false; root.removeView(web); web.destroy(); web = null; startForegroundService(new Intent(MainActivity.this, RuntimeService.class)); handler.postDelayed(MainActivity.this::awaitRuntime, 500); }
                     });
                 }
+            }
+            @Override public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                if (isFinishing() || isDestroyed()) return true;
+                recoverRenderer();
+                return true;
             }
         });
         web.setDownloadListener((url, userAgent, disposition, mime, length) -> {
@@ -204,37 +224,72 @@ public class MainActivity extends Activity {
     @Override protected void onActivityResult(int code, int result, Intent data) {
         super.onActivityResult(code, result, data);
         if (code == 1 && fileCallback != null) { fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result, data)); fileCallback = null; }
-        if (code == 3) {
-            byte[] bytes = export;
-            export = null;
-            if (result == RESULT_OK && data != null && data.getData() != null && bytes != null) {
+        if (code == exportPickerRequest && code == 3) {
+            File staged = exportPath == null ? null : new File(exportPath);
+            exportPath = null;
+            exportPickerRequest = 0;
+            if (result == RESULT_OK && data != null && data.getData() != null && staged != null && staged.isFile()) {
                 Uri destination = data.getData();
                 new Thread(() -> {
-                    try (OutputStream output = getContentResolver().openOutputStream(destination, "wt")) {
+                    try (InputStream input = new FileInputStream(staged); OutputStream output = getContentResolver().openOutputStream(destination, "wt")) {
                         if (output == null) throw new IOException("No destination");
-                        output.write(bytes);
+                        input.transferTo(output);
                         runOnUiThread(() -> Toast.makeText(this, "File saved", Toast.LENGTH_SHORT).show());
                     } catch (IOException error) { runOnUiThread(() -> Toast.makeText(this, "Could not save the file. Try exporting again.", Toast.LENGTH_LONG).show()); }
+                    finally { staged.delete(); }
                 }, "learnharness-save").start();
-            }
+            } else if (staged != null) staged.delete();
         }
     }
 
     private void saveDocument(String name, String mime, byte[] bytes) {
-        if (isFinishing() || isDestroyed() || export != null) return;
+        if (isFinishing() || isDestroyed() || exportPath != null) return;
         if (bytes.length > MAX_EXPORT) { Toast.makeText(this, "Exports are limited to 25 MB", Toast.LENGTH_LONG).show(); return; }
-        export = bytes;
+        File staged;
+        try {
+            staged = File.createTempFile("learnharness-export-", ".tmp", getCacheDir());
+            try (OutputStream output = new FileOutputStream(staged)) { output.write(bytes); }
+        } catch (IOException error) { Toast.makeText(this, "Could not prepare the export. Check free storage and try again.", Toast.LENGTH_LONG).show(); return; }
+        exportPath = staged.getAbsolutePath();
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
             .setType(mime == null || !mime.contains("/") ? "application/octet-stream" : mime)
             .putExtra(Intent.EXTRA_TITLE, name.replaceAll("[/\\\\\\p{Cntrl}]", "_").substring(0, Math.min(128, name.length())));
+        exportPickerRequest = 3;
         try { startActivityForResult(intent, 3); }
-        catch (ActivityNotFoundException error) { export = null; Toast.makeText(this, "No document app is installed", Toast.LENGTH_LONG).show(); }
+        catch (ActivityNotFoundException error) { staged.delete(); exportPath = null; exportPickerRequest = 0; Toast.makeText(this, "No document app is installed", Toast.LENGTH_LONG).show(); }
+    }
+
+    @Override protected void onSaveInstanceState(Bundle state) {
+        state.putString("exportPath", exportPath);
+        state.putInt("exportPickerRequest", exportPickerRequest);
+        super.onSaveInstanceState(state);
+    }
+
+    private void recoverRenderer() {
+        if (fileCallback != null) { fileCallback.onReceiveValue(null); fileCallback = null; }
+        if (audioRequest != null) { audioRequest.deny(); audioRequest = null; }
+        if (exportPort != null) { exportPort.close(); exportPort = null; }
+        if (web != null) { root.removeView(web); web.destroy(); web = null; }
+        loaded = false;
+        status.setText("LearnHarness is restoring this screen…");
+        status.setVisibility(View.VISIBLE);
+        if (!RuntimeService.ready) startForegroundService(new Intent(this, RuntimeService.class));
+        handler.removeCallbacksAndMessages(null);
+        handler.post(this::awaitRuntime);
+    }
+
+    private void pruneStagedExports() {
+        File[] files = getCacheDir().listFiles((dir, name) -> name.startsWith("learnharness-export-"));
+        if (files == null) return;
+        long cutoff = System.currentTimeMillis() - 24L * 60 * 60 * 1000;
+        for (File file : files) if (!file.getAbsolutePath().equals(exportPath) && file.lastModified() < cutoff) file.delete();
     }
 
     @Override protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         if (fileCallback != null) fileCallback.onReceiveValue(null);
         if (audioRequest != null) audioRequest.deny();
+        if (exportPort != null) exportPort.close();
         if (web != null) { root.removeView(web); web.destroy(); }
         super.onDestroy();
     }

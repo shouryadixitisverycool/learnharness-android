@@ -47,6 +47,7 @@ import type {
 	SessionCheckpoint,
 } from "../core/contracts.ts";
 import type { GraphStore } from "../core/ports.ts";
+import { writeJsonAtomic } from "./write-json.ts";
 
 // ─── JSONL primitives ────────────────────────────────────────────────────────
 
@@ -321,7 +322,7 @@ function readSourceMap(): Record<string, NotesSource> {
 function writeSourceMap(map: Record<string, NotesSource>): void {
 	fs.mkdirSync(path.dirname(SOURCES_FILE), { recursive: true });
 	ensureGraphFormat(); // the lazy format stamp (graph-format.ts)
-	fs.writeFileSync(SOURCES_FILE, JSON.stringify(map, null, "\t"), "utf-8");
+	writeJsonAtomic(SOURCES_FILE, map);
 }
 
 // ─── one-way purges at adapter load: dead ledgers are exactly the confusion

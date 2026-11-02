@@ -72,6 +72,8 @@ def build_resvg():
         "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER": str(linker),
         "CC_aarch64_linux_android": str(linker),
         "CXX_aarch64_linux_android": str(linker.parent / "aarch64-linux-android24-clang++"),
+        "AR_aarch64_linux_android": str(linker.parent / "llvm-ar"),
+        "AR_aarch64-linux-android": str(linker.parent / "llvm-ar"),
         "RUSTFLAGS": (env.get("RUSTFLAGS", "") + " -C link-arg=-Wl,-z,max-page-size=16384").strip(),
     })
     subprocess.run(["cargo", "+1.99.1", "build", "--release", "--locked", "--target", "aarch64-linux-android"], cwd=source, env=env, check=True)

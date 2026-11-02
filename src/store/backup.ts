@@ -371,13 +371,10 @@ export function restoreBackup(dataDir: string, backup: ParsedBackup, mode: "merg
 	try {
 		fs.mkdirSync(stage);
 		if (fs.existsSync(dataDir)) {
-			if (mode === "merge") fs.cpSync(dataDir, stage, { recursive: true, errorOnExist: true, force: false, dereference: false });
-			else {
-				const replaced = new Set(["settings.json", "chats", "graph", "prompts"]);
-				for (const name of fs.readdirSync(dataDir)) {
-					if (replaced.has(name)) continue;
-					fs.cpSync(path.join(dataDir, name), path.join(stage, name), { recursive: true, errorOnExist: true, force: false, dereference: false });
-				}
+			const replaced = mode === "replace" ? new Set(["settings.json", "chats", "graph", "prompts"]) : null;
+			for (const name of fs.readdirSync(dataDir)) {
+				if (replaced?.has(name)) continue;
+				fs.cpSync(path.join(dataDir, name), path.join(stage, name), { recursive: true, errorOnExist: true, force: false, dereference: false });
 			}
 		}
 		for (const [relative, source] of backup.entries) {

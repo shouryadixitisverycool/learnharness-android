@@ -2,7 +2,14 @@
 
 LearnHarness for Android runs the existing LearnHarness server and interface locally on an ARM64 phone. It needs no desktop server, Termux app or ADB connection after installation. Provider requests still use the provider configured in the app and require internet access.
 
-The current build supports **Android 13 or newer on ARM64 (`arm64-v8a`)**. It was exercised on a Xiaomi 2411DRN47I running Android 16. Other device models and Android versions have not been verified.
+The documented minimum is **Android 13 on ARM64 (`arm64-v8a`)**. Device evidence is narrower than that target:
+
+| Device and Android version | Evidence |
+| --- | --- |
+| Xiaomi 2411DRN47I, Android 16 | Previously exercised on an earlier build. The current `main` revision has not been rechecked on hardware. |
+| Other models and Android versions | Not verified. |
+
+Treat the minimum version as a build target, not a promise that every device has been tested.
 
 ## Install
 
@@ -38,6 +45,7 @@ python3 android/prepare.py
 - On launch, the runtime package is reused only when its install marker and server entrypoints are present; an incomplete extraction is discarded and unpacked again.
 - A foreground service keeps accepted work running while the interface detaches. When the app is backgrounded, it stops the local server after ten idle minutes; active work is rechecked every minute. Android can still stop data-sync work at its system time limit; reopening the app restarts the local server and upstream recovery behavior applies.
 - File imports and Markdown, SVG and HTML exports use Android's document picker. Exports are limited to 25 MB.
+- General settings can create a password-encrypted backup of sessions, knowledge, preferences and prompt overrides. Restore checks the archive before offering merge or replace. Saved provider credentials, subscription sign-ins, diagnostics and temporary jobs are excluded; users reconnect providers after restoring.
 - Browser-based subscription sign-in opens in the phone's browser and returns through the local callback listener.
 - Demo checks run in a separate WebView with file access and the app bridge disabled. Requests are capped at 4 MiB, diagnostics at 64 entries of 512 characters per category, probe results at 256 KiB, and responses at 1 MiB; the runner reports console errors, page errors, failed resources and asynchronous probe results.
 - Android Back dismisses the active menu or dialog before navigating. Menus, settings, information panels, chains controls and chat layout adapt to small viewports and keyboard resizing.
@@ -46,6 +54,8 @@ Desktop-only local CLI providers and Electron's desktop updater are not Android 
 
 ## Checks and limits
 
-The source suite covers the local app capability check, bounded Android demo diagnostics/transport, export picker bridge, draft isolation, atomic JSON writes and runtime-extraction readiness. Android CI runs JVM unit tests, assembles and lints the debug APK, and validates app identity, private-data exclusion and 16 KB ELF alignment. The prior device check exercised installation, provider connection, lesson generation, demos, keyboard resizing, Back navigation and opening the document picker. The picker save/import round trip was not completed, and device validation covers only the hardware and OS version listed above. Local browser sweeps found no page-wide horizontal overflow on Home at 320, 360, 640, 800 and 1024 CSS pixels; Settings at 320, 360, 640 and 800 pixels; and Chains at 320, 360 and 800 pixels. Samples included an 800×480 short-landscape viewport, but do not verify every app surface, phone, tablet, font scale or Android window mode. Backup/restore, TalkBack acceptance, release signing and Android 15 background timeout behavior remain unverified.
+The source suite covers the local app capability check, bounded Android demo diagnostics/transport, export picker bridge, draft isolation, atomic JSON writes, runtime-extraction readiness and encrypted backup validation/restore recovery. Android CI runs JVM unit tests, assembles and lints the debug APK, and validates app identity, private-data exclusion and 16 KB ELF alignment. The previous device check exercised installation, provider connection, lesson generation, demos, keyboard resizing, Back navigation and opening the document picker. The picker save/import round trip was not completed, and the current build has not been installed on hardware. A synthetic browser test completed encrypted backup creation, preview and restore. It checked 320 CSS pixels with a simulated 200% root text size; this does not verify Android system font scaling or physical touch dimensions.
+
+Local browser sweeps found no page-wide horizontal overflow on Home at 320, 360, 640, 800 and 1024 CSS pixels; Settings at 320, 360, 640 and 800 pixels; and Chains at 320, 360 and 800 pixels. Samples included an 800×480 short-landscape viewport, but do not cover every app surface, phone, tablet, font scale or Android window mode. TalkBack acceptance, release signing and Android 15 background timeout behavior remain unverified.
 
 The ChatGPT subscription-backed lesson was tested using a user-authorized account connection. This repository does not add API-key billing. Provider access, model availability and account terms remain controlled by each provider.

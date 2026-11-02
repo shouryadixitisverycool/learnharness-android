@@ -1,0 +1,68 @@
+name: Android bug report
+description: Report a reproducible problem with the Android app.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share what you observed and what you were doing. This report is public. Do not include passwords, API keys, tokens, account identifiers, private learning content or your app data folder. Check screenshots and error text for private details before posting.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: What did you expect to happen, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: List the steps, or describe what you were doing if the issue is intermittent.
+      placeholder: |
+        1. Open…
+        2. Tap…
+        3. Observe…
+    validations:
+      required: true
+  - type: input
+    id: app_build
+    attributes:
+      label: App version or source commit
+      description: If unknown, write "unknown".
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device model
+      description: If unknown, write "unknown".
+    validations:
+      required: true
+  - type: input
+    id: android_version
+    attributes:
+      label: Android version
+      description: If unknown, write "unknown".
+    validations:
+      required: true
+  - type: input
+    id: webview_version
+    attributes:
+      label: Android System WebView version
+      description: Include the version if available; otherwise write "unknown".
+    validations:
+      required: true
+  - type: input
+    id: layout_context
+    attributes:
+      label: Layout context (optional)
+      description: Portrait/landscape, split screen, keyboard open, or text size setting if relevant.
+    validations:
+      required: false
+  - type: textarea
+    id: sanitized_error
+    attributes:
+      label: Sanitized error details (optional)
+      description: Paste only the relevant error text after removing file paths, account details, tokens, prompts and learning content. Do not attach credential files or the app data folder.
+    validations:
+      required: false

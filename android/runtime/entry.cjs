@@ -14,12 +14,42 @@ function authorized(request, port, token) {
     return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-module.exports = { authorized };
+function recoverDataRestore(dataDir) {
+    if (!dataDir) return;
+    const parent = path.dirname(dataDir);
+    const journalFile = path.join(parent, `.${path.basename(dataDir)}.lh-restore.json`);
+    let journal;
+    try { journal = JSON.parse(fs.readFileSync(journalFile, 'utf8')); } catch { return; }
+    const prefix = `.${path.basename(dataDir)}.lh-restore-`;
+    if (!journal || journal.version !== 1 || typeof journal.stage !== 'string' || typeof journal.previous !== 'string'
+        || path.basename(journal.stage) !== journal.stage || path.basename(journal.previous) !== journal.previous
+        || !journal.stage.startsWith(`${prefix}stage-`) || !journal.previous.startsWith(`${prefix}previous-`)
+        || !/^[-A-Za-z0-9]+$/.test(journal.stage.slice(`${prefix}stage-`.length))
+        || !/^[-A-Za-z0-9]+$/.test(journal.previous.slice(`${prefix}previous-`.length))
+        || !['prepared', 'committed'].includes(journal.phase)) return;
+    const stage = path.join(parent, journal.stage);
+    const previous = path.join(parent, journal.previous);
+    const hasStage = fs.existsSync(stage);
+    const hasPrevious = fs.existsSync(previous);
+    if (journal.phase === 'prepared' && hasPrevious) {
+        fs.rmSync(dataDir, { recursive: true, force: true });
+        fs.renameSync(previous, dataDir);
+    } else if (journal.phase === 'committed' && !fs.existsSync(dataDir)) {
+        if (hasStage) fs.renameSync(stage, dataDir);
+        else if (hasPrevious) fs.renameSync(previous, dataDir);
+    }
+    fs.rmSync(stage, { recursive: true, force: true });
+    fs.rmSync(previous, { recursive: true, force: true });
+    fs.rmSync(journalFile, { force: true });
+}
+
+module.exports = { authorized, recoverDataRestore };
 
 if (require.main === module) {
     const port = Number(process.env.PORT);
     const token = process.env.LH_ANDROID_TOKEN;
     if (!Number.isInteger(port) || port < 1024 || !token || token.length !== 64) throw new Error('Missing Android runtime capability');
+    recoverDataRestore(process.env.LH_DATA_DIR);
     const emit = http.Server.prototype.emit;
     http.Server.prototype.emit = function (event, ...args) {
         if ((event === 'request' || event === 'upgrade') && this.address()?.port === port && !authorized(args[0], port, token)) {

@@ -97,15 +97,15 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 	};
 	const choices = [["Files", filesRef], ["Folder", folderRef]] as const;
 	return (
-		<div className="relative shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur"
+		<div className="relative min-w-0 max-w-full rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur"
 			onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}
 			onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}>
 			<input ref={filesRef} type="file" multiple accept=".md,.markdown,.txt,.pdf" className="hidden" onChange={onChange} />
 			<input ref={folderRef} type="file" {...{ webkitdirectory: "" }} className="hidden" onChange={onChange} />
 			<Hint label="Import notes into the graph" side="bottom">
 				<button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="menu" data-testid="import-notes"
-					className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent">
-					<UploadIcon className="size-3" />{importing ? "Importing…" : "Import notes…"}
+					className="flex min-h-12 min-w-0 max-w-full flex-wrap items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent">
+					<UploadIcon className="size-3 shrink-0" /><span className="min-w-0 break-words">{importing ? "Importing…" : "Import notes…"}</span>
 				</button>
 			</Hint>
 			{open && (

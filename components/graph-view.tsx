@@ -1552,24 +1552,22 @@ export function GraphView({
 			    underlays this row — Electron's drag mask ignores z-index,
 			    so without an explicit carve-out the controls were
 			    unclickable in the desktop app (owner report). The old
-			    flex-wrap (narrow-window wave, 2026-09-17) folded the row
-			    onto two lines below the sidebar threshold — owner rejected
-			    it (2026-09-20): one row always, the search shrinks (see
-			    the header-band comment on the column below). */}
+			    one-row rule let min-content overflow across the sidebar
+			    toggle on compact windows; the capped row now wraps when
+			    its controls no longer fit. */}
 			{/* Header band (owner, 2026-09-20): the controls sit IN the
 			    header's visual row — top-2 aligns with the sidebar toggle's
 			    band (header py-2, toggle h-9), every control slimmed to 36px.
 			    The width cap lives HERE on the absolute element (100% resolves
-			    against the full-bleed parent) — the row NEVER wraps (owner
-			    rejected the two-row fold); in narrow windows the search is
-			    the flexible element and shrinks instead. */}
+			    against the full-bleed parent); the action row stays inside
+			    that cap and wraps only when a narrow window needs it. */}
 			<div className="lh-no-drag lh-wco-floating absolute right-2 top-2 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-end gap-2">
 			{/* z-20 (2026-09-20): the row paints above the cost number below
 			    it — without this, the later-in-DOM cost control layered over
 			    the settings/coverage dropdowns (owner report), still hoverable
 			    and clickable on top of them. The row is a stacking context, so
 			    its open dropdowns cover the number; clicks land on the panel. */}
-			<div className="relative z-20 flex min-w-0 items-start gap-2">
+			<div className="relative z-20 flex min-w-0 max-w-full flex-wrap items-start gap-2">
 				{/* The actions row (empty-graph chrome wave, owner 2026-09-25):
 				    Import Notes always — the empty graph's entry point; search +
 				    settings only when nodes exist, fading in on their mount. */}

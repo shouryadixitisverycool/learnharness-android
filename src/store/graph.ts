@@ -42,11 +42,11 @@ import type {
 	ExtractionRunUsage,
 	NotesSource,
 	Position,
-	ProvenancePoint,
 	CoverageEntry,
 	SessionCheckpoint,
 } from "../core/contracts.ts";
 import type { GraphStore } from "../core/ports.ts";
+import { isCheckpoint, isCoverageEntry, isGraphChain, isGraphNode, isNotesSource, isPosition } from "../core/graph-validation.ts";
 import { writeJsonAtomic } from "./write-json.ts";
 
 // ─── JSONL primitives ────────────────────────────────────────────────────────
@@ -82,50 +82,11 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 	return typeof v === "object" && v !== null;
 }
 
-const isString = (v: unknown): v is string => typeof v === "string";
-
 /** Strict shape guards — anything not matching a W4 ledger shape is skipped. */
 function readValid<T>(file: string, isValid: (v: unknown) => v is T): T[] {
 	assertGraphFormat(); // honest refusal on a newer-stamped data dir
 	return readRawLines(file).filter(isValid);
 }
-
-/** Provenance points are (chatId, messageId) pairs — message-granular. */
-const isProvenancePoint = (v: unknown): v is ProvenancePoint =>
-	isRecord(v) && isString(v.chatId) && isString(v.messageId);
-
-
-const isGraphNode = (v: unknown): v is GraphNode =>
-	isRecord(v) &&
-	isString(v.id) &&
-	isString(v.name) &&
-	isString(v.statement) &&
-	Array.isArray(v.aliases) &&
-	v.aliases.every(isString) &&
-	isString(v.createdAt) &&
-	Array.isArray(v.provenance) &&
-	v.provenance.every(isProvenancePoint);
-
-/** A chain line: premises ≥ 1 (a chain IS an argument — bare propositions
- *  ride the node ledger alone), every member a string, conclusion a string.
- *  Endpoint EXISTENCE is the derivation's concern (it drops dangling
- *  chains); the store only shapes. */
-const isGraphChain = (v: unknown): v is GraphChain =>
-	isRecord(v) &&
-	isString(v.id) &&
-	Array.isArray(v.premises) &&
-	v.premises.length > 0 &&
-	v.premises.every(isString) &&
-	isString(v.conclusion) &&
-	Array.isArray(v.provenance) &&
-	v.provenance.every(isProvenancePoint) &&
-	isString(v.createdAt);
-
-const isCheckpoint = (v: unknown): v is SessionCheckpoint =>
-	isRecord(v) && isString(v.chatId) && isString(v.foldedAt);
-
-const isCoverageEntry = (v: unknown): v is CoverageEntry =>
-	isRecord(v) && isString(v.chatId) && isString(v.fp) && typeof v.tokens === "number" && isString(v.foldedAt);
 
 // ─── the port implementation ────────────────────────────────────────────────
 
@@ -273,7 +234,6 @@ function readPositionMap(): Record<string, Position> {
 		return {};
 	}
 }
-
 function writePositionMap(positions: Record<string, Position>): void {
 	fs.mkdirSync(path.dirname(POSITIONS_FILE), { recursive: true });
 	// Tmp + rename — the same crash-safety rewriteLedgers uses two blocks
@@ -292,9 +252,6 @@ function writePositionMap(positions: Record<string, Position>): void {
 		throw err;
 	}
 }
-
-const isPosition = (v: unknown): v is Position =>
-	isRecord(v) && typeof v.x === "number" && Number.isFinite(v.x) && typeof v.y === "number" && Number.isFinite(v.y);
 
 /** sources.json — { id: NotesSource }. Read-modify-write, NOT append-only:
  *  the usage log lives inside the record (like a chat's JSON file). */
@@ -342,6 +299,3 @@ function writeSourceMap(map: Record<string, NotesSource>): void {
 		}
 	}
 }
-
-const isNotesSource = (v: unknown): v is NotesSource =>
-	isRecord(v) && isString(v.id) && isString(v.filePath) && isString(v.importedAt);

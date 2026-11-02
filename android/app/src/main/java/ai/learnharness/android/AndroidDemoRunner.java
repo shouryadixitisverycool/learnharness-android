@@ -8,6 +8,8 @@ import android.webkit.*;
 import org.json.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 import java.util.function.Consumer;
@@ -40,7 +42,9 @@ final class AndroidDemoRunner implements AutoCloseable {
                 AtomicReference<JSONObject> result = new AtomicReference<>(failure("Android demo timed out"));
                 ui.post(() -> execute(request, reply -> { result.set(reply); latch.countDown(); }));
                 latch.await(42, TimeUnit.SECONDS);
-                socket.getOutputStream().write(result.get().toString().getBytes(StandardCharsets.UTF_8));
+                byte[] response = result.get().toString().getBytes(StandardCharsets.UTF_8);
+                if (response.length > 1024 * 1024) response = failure("Android demo response is too large").toString().getBytes(StandardCharsets.UTF_8);
+                socket.getOutputStream().write(response);
             } catch (IOException | JSONException ignored) { /* The caller receives a failed/closed response. */ }
             catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); return; }
             finally { active = null; }
@@ -58,7 +62,7 @@ final class AndroidDemoRunner implements AutoCloseable {
         view.getSettings().setDomStorageEnabled(false);
         view.getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         view.layout(0, 0, 900, 700);
-        JSONArray console = new JSONArray(), failed = new JSONArray();
+        List<String> console = new ArrayList<>(), failed = new ArrayList<>();
         AtomicBoolean done = new AtomicBoolean();
         Runnable[] timeout = new Runnable[1];
         Consumer<JSONObject> finish = result -> {
@@ -71,13 +75,13 @@ final class AndroidDemoRunner implements AutoCloseable {
         ui.postDelayed(timeout[0], 40000);
         view.setWebChromeClient(new WebChromeClient() {
             @Override public boolean onConsoleMessage(ConsoleMessage message) {
-                if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR) console.put(message.message());
+                if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR) DemoDiagnostics.append(console, message.message());
                 return true;
             }
         });
         view.setWebViewClient(new WebViewClient() {
             private boolean loaded;
-            @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError error) { failed.put(r.getUrl() + " (" + error.getDescription() + ")"); }
+            @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError error) { DemoDiagnostics.append(failed, r.getUrl() + " (" + error.getDescription() + ")"); }
             @Override public void onPageFinished(WebView v, String url) {
                 if (loaded || done.get()) return;
                 loaded = true;
@@ -92,16 +96,19 @@ final class AndroidDemoRunner implements AutoCloseable {
                                 view.evaluateJavascript("JSON.stringify({errors:window.__lhErrors||[],probe:window.__lhProbe})", value -> {
                                     if (done.get()) return;
                                     try {
+                                        if (value == null || value.length() > 256 * 1024) { finish.accept(failure("Demo probe result is too large")); return; }
                                         JSONObject state = new JSONObject((String) new JSONTokener(value).nextValue());
                                         JSONObject probeState = state.optJSONObject("probe");
                                         if (probeState == null || !probeState.optBoolean("done")) {
                                             if (System.currentTimeMillis() < deadline) { ui.postDelayed(this, 50); return; }
                                             finish.accept(failure("Demo probe timed out")); return;
                                         }
-                                        JSONArray errors = state.getJSONArray("errors");
-                                        if (probeState.has("error")) errors.put("probe failed: " + probeState.getString("error"));
-                                        JSONObject result = new JSONObject().put("consoleErrors", console).put("pageErrors", errors).put("failedRequests", failed)
-                                            .put("ok", console.length() == 0 && errors.length() == 0 && failed.length() == 0);
+                                        List<String> errors = new ArrayList<>();
+                                        JSONArray pageErrors = state.optJSONArray("errors");
+                                        for (int i = 0; pageErrors != null && i < pageErrors.length(); i++) DemoDiagnostics.append(errors, pageErrors.optString(i));
+                                        if (probeState.has("error")) DemoDiagnostics.append(errors, "probe failed: " + probeState.getString("error"));
+                                        JSONObject result = new JSONObject().put("consoleErrors", new JSONArray(console)).put("pageErrors", new JSONArray(errors)).put("failedRequests", new JSONArray(failed))
+                                            .put("ok", console.isEmpty() && errors.isEmpty() && failed.isEmpty());
                                         if (request.has("probe") && probeState.has("value")) result.put("probeResult", probeState.get("value"));
                                         finish.accept(result);
                                     } catch (JSONException | ClassCastException error) { finish.accept(failure("Cannot read demo probe: " + error.getMessage())); }
@@ -114,7 +121,7 @@ final class AndroidDemoRunner implements AutoCloseable {
             }
         });
         String html = request.optString("html");
-        String bootstrap = "<link rel=\"icon\" href=\"data:,\"><script>window.__lhErrors=[];addEventListener('error',e=>window.__lhErrors.push(e.message||'Resource failed'));addEventListener('unhandledrejection',e=>window.__lhErrors.push(String(e.reason)));</script>";
+        String bootstrap = "<link rel=\"icon\" href=\"data:,\"><script>window.__lhErrors=[];const lhError=e=>{if(window.__lhErrors.length<64)window.__lhErrors.push(String(e).slice(0,512))};addEventListener('error',e=>lhError(e.message||'Resource failed'));addEventListener('unhandledrejection',e=>lhError(e.reason));</script>";
         Matcher head = Pattern.compile("<head\\b[^>]*>", Pattern.CASE_INSENSITIVE).matcher(html);
         html = head.find() ? html.substring(0, head.end()) + bootstrap + html.substring(head.end()) : bootstrap + html;
         view.loadDataWithBaseURL("https://learnharness-demo.invalid/", html, "text/html", "UTF-8", null);

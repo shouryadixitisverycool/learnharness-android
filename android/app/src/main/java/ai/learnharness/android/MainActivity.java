@@ -52,6 +52,19 @@ public class MainActivity extends Activity {
         });
     }
 
+    @Override protected void onResume() {
+        super.onResume();
+        if (web == null || RuntimeService.ready) return;
+        loaded = false;
+        root.removeView(web);
+        web.destroy();
+        web = null;
+        status.setText("Starting LearnHarness…");
+        status.setVisibility(View.VISIBLE);
+        startForegroundService(new Intent(this, RuntimeService.class));
+        handler.postDelayed(this::awaitRuntime, 250);
+    }
+
     private void awaitRuntime() {
         if (isFinishing() || isDestroyed()) return;
         if (RuntimeService.failure != null) {

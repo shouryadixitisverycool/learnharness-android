@@ -32,6 +32,28 @@ jobs:
       - run: npm test
       - run: npm run lint
 
+  android:
+    name: Android debug APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "26"
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/build-server.mjs
+      - name: Install Android native packaging tools
+        run: sudo apt-get update && sudo apt-get install -y binutils libarchive-tools patchelf
+      - run: python3 android/prepare.py
+      - run: android/gradlew -p android assembleDebug
+
   standalone:
     name: Standalone (${{ matrix.platform }})
     strategy:

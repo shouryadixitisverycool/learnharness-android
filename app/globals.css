@@ -36,7 +36,6 @@
 	[data-testid="stats-model"] { min-width: 0; }
 	[data-testid="stats-model"] > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	[data-testid="stats-thinking"] { flex-shrink: 0; }
-	[data-testid="coverage-ring-popover"] { position: fixed; top: 64px; left: 8px; right: 8px; width: auto; max-height: calc(100dvh - 80px); overflow-y: auto; }
 	[data-testid="plan-popup"] > div:first-child { flex-wrap: wrap; }
 	[data-testid="question-dock"] [role="radio"] > span:last-child,
 	[data-testid="question-dock"] [role="checkbox"] > span:last-child { min-width: 0; overflow-wrap: anywhere; }

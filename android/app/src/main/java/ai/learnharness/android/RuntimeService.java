@@ -147,7 +147,8 @@ public class RuntimeService extends Service {
         if (!id.matches("[0-9a-f]{64}")) throw new IOException("Invalid runtime package");
         File root = new File(getFilesDir(), "runtime");
         File target = new File(root, id);
-        if (new File(target, ".ready").isFile()) return target;
+        if (RuntimeFiles.isInstalled(target)) return target;
+        if (target.exists()) deleteTree(target);
         File staging = new File(root, "installing");
         deleteTree(staging);
         if (!staging.mkdirs()) throw new IOException("Cannot unpack the app");

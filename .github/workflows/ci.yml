@@ -59,7 +59,7 @@ jobs:
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           "$HOME/.cargo/bin/rustup" toolchain install 1.99.1 --profile minimal --target aarch64-linux-android
       - run: python3 android/prepare.py
-      - run: android/gradlew -p android assembleDebug lintDebug
+      - run: android/gradlew -p android testDebugUnitTest assembleDebug lintDebug
       - name: Verify package identity and native payload
         run: |
           apk=android/app/build/outputs/apk/debug/app-debug.apk

@@ -15,3 +15,5 @@ android {
     packaging { jniLibs { useLegacyPackaging = true; keepDebugSymbols += ['**/*.so'] } }
     androidResources { noCompress += 'zip' }
 }
+
+dependencies { testImplementation 'junit:junit:4.13.2' }

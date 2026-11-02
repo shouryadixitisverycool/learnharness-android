@@ -32,6 +32,8 @@ See [Android build and installation](docs/android.md) for Linux prerequisites, s
 
 LearnHarness's learning engine, web interface and Android app icon come from the upstream project by **Amos Blomqvist**. This repository contains an independent Android adaptation maintained by **Vyas Devgna**. It is not an official release and is not endorsed by the upstream developer. See [CREDITS.md](CREDITS.md) and the [upstream repository](https://github.com/amosblomqvist/learnharness).
 
+Showcase thread: [LearnHarness for Android on the upstream repository](https://github.com/amosblomqvist/learnharness/discussions/472).
+
 ## License
 
 The source is distributed under the [GNU Affero General Public License v3.0](LICENSE), following the upstream project.

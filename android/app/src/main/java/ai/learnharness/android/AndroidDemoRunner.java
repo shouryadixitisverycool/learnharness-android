@@ -121,7 +121,7 @@ final class AndroidDemoRunner implements AutoCloseable {
             }
         });
         String html = request.optString("html");
-        String bootstrap = "<link rel=\"icon\" href=\"data:,\"><script>window.__lhErrors=[];const lhError=e=>{if(window.__lhErrors.length<64)window.__lhErrors.push(String(e).slice(0,512))};addEventListener('error',e=>lhError(e.message||'Resource failed'));addEventListener('unhandledrejection',e=>lhError(e.reason));</script>";
+        String bootstrap = "<link rel=\"icon\" href=\"data:,\"><script>window.__lhErrors=[];(function(){const lhError=e=>{if(window.__lhErrors.length<64)window.__lhErrors.push(String(e).slice(0,512))};addEventListener('error',e=>lhError(e.message||'Resource failed'));addEventListener('unhandledrejection',e=>lhError(e.reason))})();</script>";
         Matcher head = Pattern.compile("<head\\b[^>]*>", Pattern.CASE_INSENSITIVE).matcher(html);
         html = head.find() ? html.substring(0, head.end()) + bootstrap + html.substring(head.end()) : bootstrap + html;
         view.loadDataWithBaseURL("https://learnharness-demo.invalid/", html, "text/html", "UTF-8", null);

@@ -29,6 +29,8 @@
 	.lh-chain-table > .lh-top-bar { height: auto; min-height: 60px; flex-wrap: wrap; padding-block: 8px; }
 	.lh-chain-search { order: 5; flex: 1 1 100%; min-width: 0; }
 	.lh-chain-search input { width: 100%; min-width: 0; height: 40px; }
+	.lh-chain-table .lh-chain-column-props { flex-basis: 56px; width: 56px; }
+	.lh-chain-table .lh-chain-column-created { flex-basis: 88px; width: 88px; }
 	.lh-chain-table-close, .lh-add-source-folder { width: 48px; height: 48px; }
 	[data-lh-menu] { max-width: calc(100vw - 16px); }
 	.lh-stats-bar { flex-wrap: wrap; row-gap: 8px; }

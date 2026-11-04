@@ -4,35 +4,34 @@
 
 <h1 align="center">LearnHarness for Android</h1>
 
-<p align="center">An unofficial, standalone Android adaptation of <a href="https://github.com/amosblomqvist/learnharness">LearnHarness</a>, created by <a href="https://github.com/amosblomqvist">Amos Blomqvist</a>.</p>
+<p align="center">An unofficial Android app for <a href="https://github.com/amosblomqvist/learnharness">LearnHarness</a>, created by <a href="https://github.com/amosblomqvist">Amos Blomqvist</a>.</p>
 
-The Android app packages LearnHarness's existing learning engine and interface in a native Android host. After installation, it runs on the phone without a computer or a remote LearnHarness server. Model features require internet access and a provider connection configured in Settings.
+The app connects to your own self-hosted LearnHarness server, the server mode from the [shouryadixitisverycool/learnharness](https://github.com/shouryadixitisverycool/learnharness) fork (`docs/self-hosting.md` there). Sessions, the knowledge graph, settings and provider keys all live on the server, so the phone, the desktop app and any browser see the same state. The phone stores only the server's address and your sign-in.
+
+Versions before 1.0.0 ran a complete LearnHarness server on the phone. That edition is in this repository's history up to commit `23b7d4c`.
 
 ## Compatibility
 
-- Android 13 or newer
-- ARM64 (`arm64-v8a`) phones
-- The app was tested on a Xiaomi 2411DRN47I running Android 16. Other devices have not been verified.
+- Android 13 or newer, any CPU architecture
+- A LearnHarness server with server mode on, reachable over HTTPS (for example through `tailscale serve`)
 
 ## What works
 
-- Adaptive lessons, practice, chat history and the learning graph
-- Provider sign-in, including a ChatGPT subscription connection
-- Local file import and export through Android's document picker
-- Interactive demo checks in a separate, restricted WebView
-- Layouts adapted for narrow screens, with Android keyboard and Back navigation support
-
-This adaptation adds no API-key billing or paid service. Your chosen provider may have its own account, subscription or usage terms. Records and provider connections are kept in the app's private storage; uninstalling the app erases them.
+- Everything the server's web app does, laid out for narrow screens
+- A native Connect to Server screen that checks the address is a LearnHarness server before saving it
+- Settings → General → Server shows the server, with Connect… to change it and Sign out
+- If the server can't be reached, a screen offers Try again or Change server
+- Android Back closes the open menu, dialog or sidebar before going back
+- Exports save through Android's document picker (up to 25 MB), and file imports use it too
+- Dictation through the page's microphone, after Android asks for permission
 
 ## Build and install
 
-See [Android build and installation](docs/android.md) for Linux prerequisites, source setup, install steps and known limits. The current project provides a debug-signed direct-install build process; it is not a Play Store release.
+See [Android build and installation](docs/android.md).
 
 ## Upstream and credits
 
-LearnHarness's learning engine, web interface and Android app icon come from the upstream project by **Amos Blomqvist**. This repository contains an independent Android adaptation maintained by **Vyas Devgna**. It is not an official release and is not endorsed by the upstream developer. See [CREDITS.md](CREDITS.md) and the [upstream repository](https://github.com/amosblomqvist/learnharness).
-
-Showcase thread: [LearnHarness for Android on the upstream repository](https://github.com/amosblomqvist/learnharness/discussions/472).
+LearnHarness's learning engine, web interface and app icon come from the upstream project by **Amos Blomqvist**. The original standalone Android adaptation was made by **Vyas Devgna**. This is not an official release and is not endorsed by the upstream developer. See [CREDITS.md](CREDITS.md).
 
 ## License
 
